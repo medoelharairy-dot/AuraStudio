@@ -16,15 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Gradio Clients for Free Spaces (These spaces might change over time)
-# Note: Free spaces can be slow or have queue times. We use them for zero-cost operation.
-try:
-    # We are using an alternative/duplicate space for IDM-VTON as the main one 'yisol/IDM-VTON' often throws 429 Rate Limit errors.
-    vton_client = Client("Kwai-Kolors/Kolors-Virtual-Try-On") # Note: kwai models are often very fast and less rate-limited. If it fails, fallback to 'Nymbo/Virtual-Try-On'
-    # For consistent models or face swap we would initialize other clients here, e.g. PuLID or InstantID spaces
-    # face_swap_client = Client("Gradio-Space-URL")
-except Exception as e:
-    print(f"Warning: Could not connect to a HF Space on startup. They might be asleep. Error: {e}")
+# We will initialize clients per-request or with a fallback mechanism inside the endpoint
+# to ensure server startup doesn't fail if a space is asleep.
 
 @app.get("/")
 def read_root():
@@ -53,11 +46,16 @@ async def try_on(
         print(f"Processing Try-On. Person: {bg_path}, Garment: {gm_path}")
         
         # 2. Call the open-source IDM-VTON space
-        # Note: The api_name must match the Gradio space's defined API endpoints. 
-        # For yisol/IDM-VTON, '/tryon' is the main generation endpoint.
-        # Note: Kolors Virtual Try On takes slightly different arguments. We need to adapt it.
-        # Actually, let's use a direct duplicate of yisol IDM-VTON to keep the exact same arguments structure: "yisol/IDM-VTON-alt" or similar.
-        # Let's try init with "Nymbo/Virtual-Try-On" which is a known fork, or we catch the 429 and return a friendly error.
+        # We initialize here to catch specific space errors and provide a fallback.
+        try:
+             # Try a duplicate/alternative first to avoid the main yisol 429 errors.
+             vton_client = Client("Nymbo/Virtual-Try-On") 
+        except Exception:
+             try:
+                 # Fallback to the original space if the alternative is dead.
+                 vton_client = Client("yisol/IDM-VTON")
+             except Exception as inner_e:
+                 raise Exception(f"All Try-On backend spaces are currently offline or unreachable: {inner_e}")
         
         # We will attempt the exact same predict call. If the alternative space uses a different API, it might fail, 
         # but most IDM-VTON duplicates keep the same API.
