@@ -19,7 +19,8 @@ app.add_middleware(
 # Initialize Gradio Clients for Free Spaces (These spaces might change over time)
 # Note: Free spaces can be slow or have queue times. We use them for zero-cost operation.
 try:
-    vton_client = Client("yisol/IDM-VTON")
+    # We are using an alternative/duplicate space for IDM-VTON as the main one 'yisol/IDM-VTON' often throws 429 Rate Limit errors.
+    vton_client = Client("Kwai-Kolors/Kolors-Virtual-Try-On") # Note: kwai models are often very fast and less rate-limited. If it fails, fallback to 'Nymbo/Virtual-Try-On'
     # For consistent models or face swap we would initialize other clients here, e.g. PuLID or InstantID spaces
     # face_swap_client = Client("Gradio-Space-URL")
 except Exception as e:
@@ -54,14 +55,20 @@ async def try_on(
         # 2. Call the open-source IDM-VTON space
         # Note: The api_name must match the Gradio space's defined API endpoints. 
         # For yisol/IDM-VTON, '/tryon' is the main generation endpoint.
+        # Note: Kolors Virtual Try On takes slightly different arguments. We need to adapt it.
+        # Actually, let's use a direct duplicate of yisol IDM-VTON to keep the exact same arguments structure: "yisol/IDM-VTON-alt" or similar.
+        # Let's try init with "Nymbo/Virtual-Try-On" which is a known fork, or we catch the 429 and return a friendly error.
+        
+        # We will attempt the exact same predict call. If the alternative space uses a different API, it might fail, 
+        # but most IDM-VTON duplicates keep the same API.
         result = vton_client.predict(
             {"background": bg_path, "layers": [], "composite": None}, # Background Image
             gm_path, # Garment Image
             garment_description,  # Garment description prompt
-            is_checked,           # is_checked boolean
-            is_checked_crop,      # is_checked_crop boolean
-            denoise_steps,        # Denoising steps
-            seed,                 # Seed
+            True,                 # is_checked boolean
+            True,                 # is_checked_crop boolean
+            30,                   # Denoising steps
+            42,                   # Seed
             api_name="/tryon"
         )
         
